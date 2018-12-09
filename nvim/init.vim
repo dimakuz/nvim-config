@@ -13,16 +13,15 @@
   Plug 'embear/vim-localvimrc'
 
 " syntax
+  Plug 'fatih/vim-go' " go
   Plug 'sheerun/vim-polyglot'
   Plug 'benekastah/neomake'
-  Plug 'Chiel92/vim-autoformat'
-  Plug 'rust-lang/rust.vim'
+  Plug 'rust-lang/rust.vim', { 'for': 'rust' }
 
 " buffer management
   Plug 'moll/vim-bbye'
 
 " color
-  Plug 'mhartington/oceanic-next'
   Plug 'flazz/vim-colorschemes'
   Plug 'felixhummel/setcolors.vim'
   Plug 'jnurmine/Zenburn'
@@ -43,16 +42,13 @@
     \ }
   Plug 'junegunn/fzf'
   Plug 'Shougo/deoplete.nvim', { 'do': ':UpdateRemotePlugins' }
-  Plug 'zchee/deoplete-jedi' " python
-  Plug 'xolox/vim-lua-ftplugin' " lua
-  Plug 'fatih/vim-go' " go
+  Plug 'xolox/vim-lua-ftplugin', { 'for': 'lua' } " lua
 
 " snippets
   Plug 'SirVer/ultisnips'
   Plug 'honza/vim-snippets'
 
 " IDE
-  Plug 'davidhalter/jedi-vim' " python
   Plug 'itchyny/vim-cursorword' " highlight word under cursor
   Plug 'scrooloose/nerdtree'
   Plug 'powerman/vim-plugin-viewdoc' " Doc integration
@@ -60,6 +56,21 @@
   Plug 'Shougo/echodoc.vim'
   Plug 'tpope/vim-commentary'
   Plug 'machakann/vim-highlightedyank'
+
+" Language Servers
+
+  " The reason we use a function is because we want to get the event
+  " even if the package is unchanged as the updates are not tracked in
+  " this repo
+  function! BuildPyls(info)
+    !./install.sh
+  endfunction
+  Plug 'ficoos/pyls-vimplug', { 'do': function('BuildPyls') }
+
+  function! BuildCCLS(info)
+    !cmake -H. -BRelease && cmake --build Release
+  endfunction
+  Plug 'MaskRay/ccls', { 'do': function('BuildCCLS') }
 
 " movement
   Plug 'tpope/vim-surround'
@@ -80,34 +91,15 @@
 
 " Python development ------------------------------------------------------{{{
 
-  let g:neomake_python_enabled_makers = ['flake8']
-  call neomake#configure#automake('nw', 750)
-  " we use deoplete-jedi
-  let g:jedi#completions_enabled = 0
-  let g:jedi#force_py_version = '3'
-  " autocmd BufWinEnter '__doc__' setlocal bufhidden=delete
-  let g:jedi#goto_command = "<leader>d"
-  let g:jedi#goto_assignments_command = "<leader>g"
-  let g:jedi#goto_definitions_command = ""
-  let g:jedi#documentation_command = "<leader>?"
-  let g:jedi#usages_command = "<leader>n"
-  let g:jedi#completions_command = "<C-Space>"
-  let g:jedi#rename_command = "<leader>r"
+  let g:neomake_python_enabled_makers = [] " we use LSP
 
 "}}}
 
 " C/C++ Development -------------------------------------------------------{{{
-  let g:neomake_c_enabled_makers = ['clang']
-  let linter = neomake#makers#ft#c#clang()
-  function linter.fn(jobinfo) abort
-    let maker = copy(self)
-    if filereadable('.clang')
-      let maker.args += split(join(readfile('.clang'), "\n"))
-    endif
-    return maker
-  endfunction
 
-  let g:neomake_c_clang_maker = linter
+  let g:c_syntax_for_h=1
+  let g:neomake_c_enabled_makers = [] " we use LSP
+  let g:neomake_cpp_enabled_makers = [] " we use LSP
 "}}}
 
 " General -----------------------------------------------------------------{{{
@@ -155,11 +147,13 @@
   let g:echodoc#enable_at_startup = 1
   let g:echodoc#type = 'signature'
 "}}}
+
 " Denite ------------------------------------------------------------------{{{
 
   call denite#custom#option('default', 'prompt', '»')
-  call denite#custom#source(
-        \ 'default', 'matchers', ['matcher_cpsm'])
+  call denite#custom#option('default', 'auto-resize', 1)
+  call denite#custom#option('default', 'direction', 'botright')
+  call denite#custom#source('default', 'matchers', ['matcher_cpsm'])
 
   " Change mappings.
   call denite#custom#map(
@@ -175,7 +169,31 @@
   \ 'noremap'
   \)
 
-  nnoremap <silent> <c-p> :Denite -auto-resize -direction=botright file_rec<CR>
+  function CtrlP()
+    call denite#start(b:ctrlp_sources)
+  endfunction
+
+  function DetectSources()
+    if exists('b:ctrlp_sources')
+      return
+    endif
+
+    let b:ctrlp_sources = []
+    silent! !git status
+    if v:shell_error == 0
+      call add(b:ctrlp_sources, {'name': 'git', 'args': []})
+      call add(b:ctrlp_sources, {'name': 'git-other', 'args': []})
+      silent! !git config --file .gitmodules --list
+      if v:shell_error == 0
+        call add(b:ctrlp_sources, {'name': 'git-submodules', 'args': []})
+      endif
+    else
+      call add(b:ctrlp_sources, {'name': 'file/rec', 'args': []})
+    endif
+  endfunction
+
+  au BufEnter * call DetectSources()
+  nnoremap <silent> <c-p> :call CtrlP() <CR>
   nnoremap <silent> <c-j> :Denite -auto-resize -direction=botright location_list<CR>
   nnoremap <silent> <c-t> :Denite -auto-resize -direction=botright buffer<CR>
   nnoremap <silent> <c-l> :Denite -auto-resize -direction=botright line<CR>
@@ -183,7 +201,26 @@
   nnoremap <silent> <a-s-p> :Denite -auto-resize -direction=botright grep<CR>
   nnoremap <silent> <c-a-o> :Denite -auto-resize -direction=botright outline<CR>
   nnoremap <leader>\ :Denite -auto-resize -direction=botright command<CR>
-  call denite#custom#var('file_rec', 'command',
+
+  call denite#custom#alias('source', 'git', 'file/rec')
+  call denite#custom#var('git', 'command',
+        \['git',
+        \ 'ls-files',
+        \ '-c'])
+
+  call denite#custom#alias('source', 'git-other', 'file/rec')
+  call denite#custom#var('git-other', 'command',
+        \['git',
+        \ 'ls-files',
+        \ '-o',
+        \ '--exclude-standard'])
+
+  call denite#custom#alias('source', 'git-submodules', 'file/rec')
+  call denite#custom#var('git-submodules', 'command',
+        \['sh', '-c',
+        \ 'git config --file .gitmodules --get-regexp path | cut -d " " -f2- | xargs git ls-files --recurse-submodules'])
+
+  call denite#custom#var('file/rec', 'command',
         \['ag',
         \'-s',
         \'--follow',
@@ -216,53 +253,47 @@
 "}}}
 
 " UltiSnips ---------------------------------------------------------------{{{
-imap <silent><expr> <CR> pumvisible() ? "\<c-y>" : "\<cr>"
-imap <silent><expr> <tab> pumvisible() ? "\<c-y>" : "\<tab>"
+  imap <silent><expr> <CR> pumvisible() ? "\<c-y>" : "\<cr>"
+  imap <silent><expr> <tab> pumvisible() ? "\<c-y>" : "\<tab>"
 
-let g:UltiSnipsExpandTrigger="<NUL>"
-let g:UltiSnipsListSnippets="<NUL>"
-let g:UltiSnipsJumpForwardTrigger="<tab>"
-let g:UltiSnipsJumpBackwardTrigger="<s-tab>"
+  let g:UltiSnipsExpandTrigger="<NUL>"
+  let g:UltiSnipsListSnippets="<NUL>"
+  let g:UltiSnipsJumpForwardTrigger="<tab>"
+  let g:UltiSnipsJumpBackwardTrigger="<s-tab>"
 
   let g:ulti_expand_res = 0 "default value, just set once
 
-function! CompleteSnippet()
-  if empty(v:completed_item)
-    return
-  endif
+  function! CompleteSnippet()
+    if empty(v:completed_item)
+      return
+    endif
 
-  call UltiSnips#ExpandSnippet()
-  if g:ulti_expand_res > 0
-    return
-  endif
+    call UltiSnips#ExpandSnippet()
+    if g:ulti_expand_res > 0
+      return
+    endif
 
-  let l:complete = type(v:completed_item) == v:t_dict ? v:completed_item.word : v:completed_item
-  let l:comp_len = len(l:complete)
+    let l:complete = type(v:completed_item) == v:t_dict ? v:completed_item.word : v:completed_item
+    let l:comp_len = len(l:complete)
 
-  let l:cur_col = mode() == 'i' ? col('.') - 2 : col('.') - 1
-  let l:cur_line = getline('.')
+    let l:cur_col = mode() == 'i' ? col('.') - 2 : col('.') - 1
+    let l:cur_line = getline('.')
 
-  let l:start = l:comp_len <= l:cur_col ? l:cur_line[:l:cur_col - l:comp_len] : ''
-  let l:end = l:cur_col < len(l:cur_line) ? l:cur_line[l:cur_col + 1 :] : ''
+    let l:start = l:comp_len <= l:cur_col ? l:cur_line[:l:cur_col - l:comp_len] : ''
+    let l:end = l:cur_col < len(l:cur_line) ? l:cur_line[l:cur_col + 1 :] : ''
 
-  call setline('.', l:start . l:end)
-  call cursor('.', l:cur_col - l:comp_len + 2)
+    call setline('.', l:start . l:end)
+    call cursor('.', l:cur_col - l:comp_len + 2)
 
-  call UltiSnips#Anon(l:complete)
-endfunction
+    call UltiSnips#Anon(l:complete)
+  endfunction
 
-"autocmd CompleteDone * call CompleteSnippet()
-"}}}
-
-" YouCompleteMe -----------------------------------------------------------{{{
-  let g:ycm_filetype_specific_completion_to_disable = {
-    \ 'go': 1
-    \}
+  autocmd CompleteDone * call CompleteSnippet()
 "}}}
 
 " Depolete ----------------------------------------------------------------{{{
 
-  set completeopt="menuone,longest,noinsert"
+  set completeopt=menuone,noinsert
   let g:deoplete#enable_at_startup = 1
   let g:deoplete#auto_completion_start_length = 1
   let g:deoplete#enable_smart_case = 1
@@ -285,7 +316,7 @@ endfunction
     let g:deoplete#sources={}
   endif
   let g:deoplete#sources._=['buffer', 'file', 'ultisnips']
-  let g:deoplete#sources.python=['buffer', 'file', 'ultisnips', 'jedi']
+  let g:deoplete#sources.python=['buffer', 'file', 'ultisnips', 'LanguageClient']
   let g:deoplete#sources.rust=['ultisnips', 'LanguageClient']
   let g:deoplete#sources.cpp=['ultisnips', 'LanguageClient']
   let g:deoplete#sources.c=['ultisnips', 'LanguageClient']
@@ -302,16 +333,17 @@ endfunction
     nnoremap <leader>la :call LanguageClient_workspace_applyEdit()<CR>
     nnoremap <leader>lc :call LanguageClient#textDocument_completion()<CR>
     nnoremap <leader>lh :call LanguageClient#textDocument_hover()<CR>
-    nnoremap <leader>ls :call LanguageClient_textDocument_documentSymbol()<CR>
+    nnoremap <leader>ls :Denite -auto-resize -direction=botright documentSymbol<CR>
+    nnoremap <leader>lS :Denite -auto-resize -direction=botright workspaceSymbol<CR>
     nnoremap <leader>lm :call LanguageClient_contextMenu()<CR>
 
-    nnoremap <F1> :call LanguageClient_contextMenu()<CR>
+    nnoremap <F1> :Denite -auto-resize -direction=botright contextMenu<CR>
     nnoremap <silent> <F2> :call LanguageClient_textDocument_rename()<CR>
   endfunction()
 
   augroup LSP
     autocmd!
-    autocmd FileType cpp,c,go,rust call SetLSPShortcuts()
+    autocmd FileType cpp,c,go,rust,python call SetLSPShortcuts()
   augroup END
 
   if !exists('g:deoplete#omni#functions')
@@ -329,13 +361,10 @@ endfunction
   highlight CursorLine guifg=none guibg=none gui=NONE
   highlight Search cterm=NONE ctermfg=black ctermbg=cyan
   highlight SpecialKey ctermfg=darkgrey guibg=none gui=NONE
-  highlight clear SpellBad
-  highlight SpellBad ctermfg=red
-  autocmd BufRead *.rst setlocal spell spelllang=en
 "}}}
 
 " IDE ---------------------------------------------------------------------{{{
-  nmap <f6> :wa<bar>make<CR>
+  nmap <f6> :make<CR>
   nmap <f5> :enew<CR>:call termopen(runprg, {'name': '[execution]'})<CR>
 "}}}
 
@@ -419,9 +448,11 @@ endfunction
   autocmd BufWritePost *.rs Neomake! cargo
   let g:racer_cmd = $HOME."/.cargo/bin/racer"
   let g:LanguageClient_serverCommands = {
-    \ 'rust': ['cargo', 'run', '--release', '--manifest-path='.$HOME.'/.config/nvim/rust/rls/Cargo.toml'],
-    \ 'c'   : ['clangd'],
-    \ 'go'  : ['go-langserver', '-gocodecompletion'],
+    \ 'rust':   ['cargo', 'run', '--release', '--manifest-path='.$HOME.'/.config/nvim/rust/rls/Cargo.toml'],
+    \ 'c'   :   [g:plug_home.'/ccls/Release/ccls'],
+    \ 'cpp' :   [g:plug_home.'/ccls/Release/ccls'],
+    \ 'go'  :   ['go-langserver', '-gocodecompletion'],
+    \ 'python': [g:plug_home.'/pyls-vimplug/pyls'],
     \ }
 "}}}
 
@@ -440,10 +471,9 @@ endfunction
   nmap <c-s-j> ddp
   nmap <c-s> :w<CR>
   vmap <leader>y "+y
-  nmap <F12> :nohl<CR>
+  nmap <F12> :nohl<CR>:call LanguageClient_clearDocumentHighlight()<CR>
 "}}}
 
-"
 " extra whitespace --------------------------------------------------------{{{
 
   :highlight ExtraWhitespace ctermbg=darkgreen guibg=lightgreen
@@ -454,26 +484,7 @@ endfunction
 
 "}}}
 
-" cscope ------------------------------------------------------------------{{{
-
- if has("cscope")
-   set csto=0
-   set cst
-   set nocsverb
-   " add any database in current directory
-   if filereadable("cscope.out")
-     cs add cscope.out
-     " else add database pointed to by environment
-   elseif $CSCOPE_DB != ""
-     cs add $CSCOPE_DB
-   endif
-  endif
-
-  nmap <leader>] :cs find s <C-R>=expand("<cword>")<CR><CR>
-  nmap <leader>[ :cs find c <C-R>=expand("<cword>")<CR><CR>
-  nmap <leader>d <c-w>}
-"}}}
-" viewdoc -------------------------------------------------------------------{{{
+" viewdoc -----------------------------------------------------------------{{{
   let g:no_plugin_maps = 1
   let g:viewdoc_open='edit'
   let g:viewdoc_only=0
@@ -503,21 +514,8 @@ endfunction
   let g:localvimrc_persistent=2
 "}}}
 
-" cscope ------------------------------------------------------------------{{{
-
-  function! Rescope()
-    if filereadable(".cscope")
-      :silent exec "!./.cscope"
-      :cscope reset
-    endif
-  endfunction
-
-  autocmd! BufWritePost * call Rescope()
-
-"}}}
-
-" termbin -----------------------------------------------------------------{{{
-"  nmap <leader>o  :%w !nc termbin.com 9999 \| grep -a http \| xargs firefox <CR><CR>
-"}}}
+" spell -------------------------------------------------------------------{{{
+  autocmd FileType rst setlocal spell spelllang=en
+" }}}
 
 " vim: set tabstop=2 shiftwidth=2 expandtab:
