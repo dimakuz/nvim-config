@@ -242,11 +242,6 @@
   :au Filetype gitcommit setlocal spell
 "}}}
 
-" Vim format --------------------------------------------------------------{{{
-
-  noremap <silent> <leader>f :Autoformat<CR>
-"}}}
-
 " Hightlighed yank --------------------------------------------------------{{{
   let g:highlightedyank_highlight_duration = 4000
 
@@ -315,7 +310,7 @@
   if !exists('g:deoplete#sources')
     let g:deoplete#sources={}
   endif
-  let g:deoplete#sources._=['buffer', 'file', 'ultisnips']
+  let g:deoplete#sources._=[] "'buffer', 'file', 'ultisnips']
   let g:deoplete#sources.python=['buffer', 'file', 'ultisnips', 'LanguageClient']
   let g:deoplete#sources.rust=['ultisnips', 'LanguageClient']
   let g:deoplete#sources.cpp=['ultisnips', 'LanguageClient']
@@ -516,6 +511,7 @@
 
 " spell -------------------------------------------------------------------{{{
   autocmd FileType rst setlocal spell spelllang=en
+  autocmd FileType rst syntax spell toplevel
 " }}}
 
 " vim: set tabstop=2 shiftwidth=2 expandtab:
