@@ -25,6 +25,7 @@
   Plug 'mhartington/oceanic-next'
   Plug 'flazz/vim-colorschemes'
   Plug 'felixhummel/setcolors.vim'
+  Plug 'jnurmine/Zenburn'
 
 " git
   Plug 'tpope/vim-fugitive'
@@ -57,6 +58,8 @@
   Plug 'powerman/vim-plugin-viewdoc' " Doc integration
   Plug 'majutsushi/tagbar'
   Plug 'Shougo/echodoc.vim'
+  Plug 'tpope/vim-commentary'
+  Plug 'machakann/vim-highlightedyank'
 
 " movement
   Plug 'tpope/vim-surround'
@@ -81,6 +84,7 @@
   call neomake#configure#automake('nw', 750)
   " we use deoplete-jedi
   let g:jedi#completions_enabled = 0
+  let g:jedi#force_py_version = '3'
   " autocmd BufWinEnter '__doc__' setlocal bufhidden=delete
   let g:jedi#goto_command = "<leader>d"
   let g:jedi#goto_assignments_command = "<leader>g"
@@ -93,7 +97,7 @@
 "}}}
 
 " C/C++ Development -------------------------------------------------------{{{
-  let g:ycm_confirm_extra_conf = 0
+  let g:neomake_c_enabled_makers = ['clang']
   let linter = neomake#makers#ft#c#clang()
   function linter.fn(jobinfo) abort
     let maker = copy(self)
@@ -173,16 +177,32 @@
 
   nnoremap <silent> <c-p> :Denite -auto-resize -direction=botright file_rec<CR>
   nnoremap <silent> <c-j> :Denite -auto-resize -direction=botright location_list<CR>
+  nnoremap <silent> <c-t> :Denite -auto-resize -direction=botright buffer<CR>
+  nnoremap <silent> <c-l> :Denite -auto-resize -direction=botright line<CR>
   nnoremap <silent> <a-p> :DeniteCursorWord -auto-resize -direction=botright grep<CR>
   nnoremap <silent> <a-s-p> :Denite -auto-resize -direction=botright grep<CR>
   nnoremap <silent> <c-a-o> :Denite -auto-resize -direction=botright outline<CR>
   nnoremap <leader>\ :Denite -auto-resize -direction=botright command<CR>
   call denite#custom#var('file_rec', 'command',
         \['ag',
+        \'-s',
         \'--follow',
         \'--nocolor',
         \'--nogroup',
         \'-g', ''])
+  " Ag command on grep source
+  call denite#custom#var('grep', 'command', ['rg'])
+  call denite#custom#var('grep', 'default_opts',
+			\ ['-S', '--vimgrep'])
+  call denite#custom#var('grep', 'recursive_opts', [])
+  call denite#custom#var('grep', 'pattern_opt', [])
+  call denite#custom#var('grep', 'separator', ['--'])
+  call denite#custom#var('grep', 'final_opts', [])
+"}}}
+
+" Git Gutter --------------------------------------------------------------{{{
+  set signcolumn=yes
+  :au Filetype gitcommit setlocal spell
 "}}}
 
 " Vim format --------------------------------------------------------------{{{
@@ -190,8 +210,14 @@
   noremap <silent> <leader>f :Autoformat<CR>
 "}}}
 
+" Hightlighed yank --------------------------------------------------------{{{
+  let g:highlightedyank_highlight_duration = 4000
+
+"}}}
+
 " UltiSnips ---------------------------------------------------------------{{{
 imap <silent><expr> <CR> pumvisible() ? "\<c-y>" : "\<cr>"
+imap <silent><expr> <tab> pumvisible() ? "\<c-y>" : "\<tab>"
 
 let g:UltiSnipsExpandTrigger="<NUL>"
 let g:UltiSnipsListSnippets="<NUL>"
@@ -225,7 +251,7 @@ function! CompleteSnippet()
   call UltiSnips#Anon(l:complete)
 endfunction
 
-autocmd CompleteDone * call CompleteSnippet()
+"autocmd CompleteDone * call CompleteSnippet()
 "}}}
 
 " YouCompleteMe -----------------------------------------------------------{{{
@@ -299,8 +325,13 @@ autocmd CompleteDone * call CompleteSnippet()
   syntax on
   "let g:gruvbox_contrast_dark = "hard"
   set background=dark
-  colorscheme jellybeans
+  colorscheme zenburn
+  highlight CursorLine guifg=none guibg=none gui=NONE
+  highlight Search cterm=NONE ctermfg=black ctermbg=cyan
   highlight SpecialKey ctermfg=darkgrey guibg=none gui=NONE
+  highlight clear SpellBad
+  highlight SpellBad ctermfg=red
+  autocmd BufRead *.rst setlocal spell spelllang=en
 "}}}
 
 " IDE ---------------------------------------------------------------------{{{
@@ -310,6 +341,7 @@ autocmd CompleteDone * call CompleteSnippet()
 
 " vim-airline -------------------------------------------------------------{{{
 
+  let g:airline#extensions#branch#enabled = 1
   let g:airline#extensions#tagbar#enabled = 1
   let g:airline#extensions#tabline#enabled = 1
   set hidden
@@ -322,7 +354,7 @@ autocmd CompleteDone * call CompleteSnippet()
   let g:airline_right_sep = ''
   let g:airline_right_alt_sep = ''
   let g:airline_powerline_fonts = 0
-  let g:airline_theme='jellybeans'
+  let g:airline_theme='zenburn'
 
   tmap <esc><esc> <c-\><c-n>
   nmap <a-right> :bnext<CR>
@@ -354,8 +386,17 @@ autocmd CompleteDone * call CompleteSnippet()
   nmap <leader>9 <Plug>AirlineSelectTab9
 "}}}
 
+" Remember cursor pos -----------------------------------------------------{{{
+  autocmd BufReadPost *
+            \ if line("'\"") > 0 && line("'\"") <= line("$") |
+            \   exe "normal g`\"" |
+            \ endif
+"}}}
+
 " nerdtree ----------------------------------------------------------------{{{
   nmap <leader>o :TagbarToggle<CR>
+  let g:tagbar_autofocus = 0
+  let g:tagbar_sort = 0
 
   function IsNerdTreeEnabled()
     return exists('t:NERDTreeBufName') && bufwinnr(t:NERDTreeBufName) != -1
@@ -402,6 +443,7 @@ autocmd CompleteDone * call CompleteSnippet()
   nmap <F12> :nohl<CR>
 "}}}
 
+"
 " extra whitespace --------------------------------------------------------{{{
 
   :highlight ExtraWhitespace ctermbg=darkgreen guibg=lightgreen
@@ -472,6 +514,10 @@ autocmd CompleteDone * call CompleteSnippet()
 
   autocmd! BufWritePost * call Rescope()
 
+"}}}
+
+" termbin -----------------------------------------------------------------{{{
+"  nmap <leader>o  :%w !nc termbin.com 9999 \| grep -a http \| xargs firefox <CR><CR>
 "}}}
 
 " vim: set tabstop=2 shiftwidth=2 expandtab:
